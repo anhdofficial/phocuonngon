@@ -227,5 +227,19 @@
     const y = document.getElementById("year"); if (y) y.textContent = new Date().getFullYear();
   });
 
+  /* ---------- Ảnh dự phòng: hiện placeholder đẹp nếu ảnh chưa được upload ---------- */
+  const IMG_FALLBACK = "data:image/svg+xml;utf8," + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0" stop-color="#ffedd5"/><stop offset="1" stop-color="#fdba74"/>` +
+    `</linearGradient></defs><rect width="800" height="800" fill="url(#g)"/>` +
+    `<text x="400" y="440" font-size="160" text-anchor="middle">🌯</text>` +
+    `<text x="400" y="560" font-size="40" text-anchor="middle" fill="#9a3412" font-family="sans-serif" font-weight="bold">Phở Cuốn Ngon</text></svg>`
+  );
+  document.addEventListener("error", (e) => {
+    const t = e.target;
+    if (t && t.tagName === "IMG" && !t.dataset.fbk) { t.dataset.fbk = "1"; t.src = IMG_FALLBACK; }
+  }, true);
+
   window.PCN = { CFG, DEMO_MODE, LIVE, store, cart, UI, money, esc, STATUS_LABEL, createOrder, getOrder };
 })();
