@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Quản trị — Phở Cuốn Ngon</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#c2410c">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌯</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="logo" href="index.html"><span class="logo-mark">🌯</span>Phở Cuốn Ngon <small style="font-size:.7rem;color:var(--muted)">· quản trị</small></a>
+    <div class="header-actions"><a class="btn btn-outline" href="index.html" style="padding:8px 16px;font-size:.85rem">← Về trang chủ</a></div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="container" style="max-width:960px">
+      <!-- Đăng nhập PIN -->
+      <div class="form-card" id="pin-card" style="max-width:420px;margin:0 auto">
+        <h1 style="font-size:1.3rem;margin-bottom:6px;text-align:center">Đăng nhập quản trị</h1>
+        <p style="font-size:.88rem;color:var(--muted);text-align:center;margin-bottom:16px">Nhập mã PIN quản trị (mặc định <code>123456</code> — đổi trong Supabase sau khi deploy).</p>
+        <form id="pin-form">
+          <div class="form-group">
+            <label for="pin">Mã PIN</label>
+            <input id="pin" type="password" inputmode="numeric" placeholder="••••••" autocomplete="off">
+          </div>
+          <button class="btn btn-primary btn-block" type="submit" id="pin-btn">Đăng nhập</button>
+        </form>
+        <p id="demo-note" style="display:none;font-size:.82rem;color:var(--muted);text-align:center;margin-top:12px">⚠️ Chưa cấu hình Supabase — trang quản trị chạy ở chế độ demo, hiển thị đơn hàng mẫu.</p>
+      </div>
+
+      <!-- Bảng đơn -->
+      <div id="admin-panel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <h1 style="font-size:1.3rem">Đơn hàng mới nhất</h1>
+          <button class="btn btn-outline" id="reload-btn" style="padding:8px 16px;font-size:.85rem">↻ Tải lại</button>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>SĐT</th><th>Món</th><th>Tổng</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
+            <tbody id="orders-body"><tr><td colspan="7" style="text-align:center;color:var(--muted)">Đang tải…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script>
+  (async function () {
+    let sb = null;
+    if (!PCN.DEMO_MODE && window.supabase) {
+      sb = window.supabase.createClient(PCN.CFG.SUPABASE_URL, PCN.CFG.SUPABASE_ANON_KEY);
+    }
+    if (PCN.DEMO_MODE) document.getElementById("demo-note").style.display = "block";
+    let pin = sessionStorage.getItem("pcn_admin_pin") || "";
+    if (pin) { showPanel(); loadOrders(); }
+
+    document.getElementById("pin-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      pin = document.getElementById("pin").value.trim();
+      if (!pin) return PCN.UI.toast("Vui lòng nhập mã PIN");
+      const btn = document.getElementById("pin-btn");
+      btn.disabled = true; btn.textContent = "Đang kiểm tra…";
+      try {
+        if (PCN.DEMO_MODE) { if (pin !== "123456") throw new Error("bad"); }
+        else {
+          const { data, error } = await sb.rpc("admin_login", { p_pin: pin });
+          if (error || !data) throw new Error("bad");
+        }
+        sessionStorage.setItem("pcn_admin_pin", pin);
+        showPanel(); loadOrders();
+      } catch (err) { PCN.UI.toast("Mã PIN không đúng"); }
+      finally { btn.disabled = false; btn.textContent = "Đăng nhập"; }
+    });
+
+    function showPanel() {
+      document.getElementById("pin-card").style.display = "none";
+      document.getElementById("admin-panel").style.display = "block";
+    }
+
+    async function loadOrders() {
+      const body = document.getElementById("orders-body");
+      try {
+        let orders;
+        if (PCN.DEMO_MODE) {
+          orders = JSON.parse(localStorage.getItem("pcn_demo_orders") || "[]");
+        } else {
+          const { data, error } = await sb.rpc("admin_list_orders", { p_pin: pin });
+          if (error) throw error;
+          orders = data || [];
+        }
+        if (!orders.length) { body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted)">Chưa có đơn hàng nào.</td></tr>`; return; }
+        body.innerHTML = orders.map(o => {
+          const items = (Array.isArray(o.items) ? o.items : []).map(it => `${PCN.esc(it.name)} ×${it.qty}`).join(", ");
+          const opts = Object.entries(PCN.STATUS_LABEL).map(([k, v]) =>
+            `<option value="${k}"${k === o.status ? " selected" : ""}>${v}</option>`).join("");
+          const time = o.created_at ? new Date(o.created_at).toLocaleString("vi-VN") : "";
+          return `<tr>
+            <td><strong>${PCN.esc(o.order_code)}</strong></td>
+            <td>${PCN.esc(o.customer_name)}<br><small style="color:var(--muted)">${PCN.esc(o.address || "")}</small></td>
+            <td>${PCN.esc(o.phone)}</td>
+            <td style="white-space:normal;min-width:180px"><small>${items}</small></td>
+            <td><strong>${PCN.money(o.total)}</strong></td>
+            <td><span class="status-pill st-${o.status}">${PCN.STATUS_LABEL[o.status] || o.status}</span><br>
+              <select data-order="${o.id}" data-status style="margin-top:6px">${opts}</select></td>
+            <td><small>${time}</small></td>
+          </tr>`;
+        }).join("");
+      } catch (err) {
+        console.error(err);
+        body.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#991b1b">Không tải được đơn hàng. Phiên đăng nhập có thể đã hết hạn — tải lại trang và nhập lại PIN.</td></tr>`;
+      }
+    }
+
+    document.getElementById("orders-body").addEventListener("change", async (e) => {
+      const sel = e.target.closest("[data-status]");
+      if (!sel) return;
+      const id = sel.dataset.order, status = sel.value;
+      try {
+        if (PCN.DEMO_MODE) {
+          const demo = JSON.parse(localStorage.getItem("pcn_demo_orders") || "[]");
+          const o = demo.find(x => String(x.id) === String(id) || x.order_code === id);
+          // demo orders may not have uuid; match by row via order_code
+          const row = sel.closest("tr");
+          const code = row.querySelector("strong").textContent;
+          const target = demo.find(x => x.order_code === code);
+          if (target) target.status = status;
+          localStorage.setItem("pcn_demo_orders", JSON.stringify(demo));
+        } else {
+          const { data, error } = await sb.rpc("admin_update_order", { p_pin: pin, p_id: id, p_status: status });
+          if (error || !data) throw error || new Error("update failed");
+        }
+        PCN.UI.toast("Đã cập nhật trạng thái");
+        loadOrders();
+      } catch (err) { console.error(err); PCN.UI.toast("Cập nhật thất bại"); }
+    });
+
+    document.getElementById("reload-btn").addEventListener("click", loadOrders);
+  })();
+</script>
+</body>
+</html>

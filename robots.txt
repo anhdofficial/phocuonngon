@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /quan-tri.html
+Disallow: /js/config.js
+
+Sitemap: https://pho-cuon-ngon.onrender.com/sitemap.xml
